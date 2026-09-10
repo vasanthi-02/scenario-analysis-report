@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Report - {{ report["client_name"] }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="top-bar">
+        <h2>Scenario Analysis Report</h2>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <p><strong>Client Name:</strong> {{ report["client_name"] }}</p>
+        <p><strong>Report Generated On:</strong> {{ report["created_at"] }}</p>
+
+        <h3>Advice Given at Each Stage</h3>
+        <table>
+            <tr>
+                <th>Stage Date</th>
+                <th>Amount Invested (₹)</th>
+                <th>Advised Return (%)</th>
+                <th>Advice</th>
+                <th>Years Since Stage</th>
+                <th>Value If Advice Followed (₹)</th>
+            </tr>
+            {% for stage in stages %}
+            <tr>
+                <td>{{ stage["stage_date"] }}</td>
+                <td>{{ "%.2f"|format(stage["amount"]) }}</td>
+                <td>{{ stage["advised_return"] }}</td>
+                <td>{{ stage["advice_text"] }}</td>
+                <td>{{ "%.2f"|format(stage["years"]) }}</td>
+                <td>{{ "%.2f"|format(stage["future_value"]) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <div class="summary-box">
+            <p><strong>Total Amount Invested:</strong> ₹{{ "%.2f"|format(total_invested) }}</p>
+            <p><strong>Total Present Value If Advice Was Followed:</strong> ₹{{ "%.2f"|format(total_value) }}</p>
+            <p><strong>Growth From Advice:</strong> ₹{{ "%.2f"|format(total_value - total_invested) }}</p>
+        </div>
+
+        <p class="hint">
+            This report shows what the client's portfolio would be worth today if they had followed the advisor's
+            recommendations at each stage, assuming the advised annual return was achieved.
+        </p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - Scenario Report</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="top-bar">
+        <h2>Welcome, {{ username }}</h2>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+
+    <div class="container">
+        <div class="top-bar">
+            <h3>Your Scenario Reports</h3>
+            <a class="btn" href="{{ url_for('new_report') }}">+ New Report</a>
+        </div>
+
+        {% if reports|length == 0 %}
+            <p>No reports created yet. Click "New Report" to create your first one.</p>
+        {% else %}
+            <table>
+                <tr>
+                    <th>Client Name</th>
+                    <th>Created On</th>
+                    <th>Action</th>
+                </tr>
+                {% for report in reports %}
+                <tr>
+                    <td>{{ report["client_name"] }}</td>
+                    <td>{{ report["created_at"] }}</td>
+                    <td>
+                        <a href="{{ url_for('view_report', report_id=report['id']) }}">View</a>
+                        &nbsp;|&nbsp;
+                        <form action="{{ url_for('delete_report', report_id=report['id']) }}" method="POST" style="display:inline">
+                            <button type="submit" class="link-btn" onclick="return confirm('Delete this report?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% endif %}
+    </div>
+</body>
+</html>

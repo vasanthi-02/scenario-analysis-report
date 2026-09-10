@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>New Report - Scenario Report</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="top-bar">
+        <h2>Create Scenario Analysis Report</h2>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <form action="{{ url_for('create_report') }}" method="POST">
+            <label>Client Name</label>
+            <input type="text" name="client_name" required>
+
+            <h3>Advice Stages</h3>
+            <p class="hint">Add each point in time where you gave investment advice to the client.</p>
+
+            <div id="stages-container">
+                <div class="stage-row">
+                    <label>Stage Date</label>
+                    <input type="date" name="stage_date[]" required>
+
+                    <label>Amount Invested (₹)</label>
+                    <input type="number" step="0.01" name="amount[]" required>
+
+                    <label>Advised Annual Return (%)</label>
+                    <input type="number" step="0.01" name="advised_return[]" required>
+
+                    <label>Advice Given</label>
+                    <input type="text" name="advice_text[]" placeholder="e.g. Invest in Nifty 50 index fund" required>
+                    <hr>
+                </div>
+            </div>
+
+            <button type="button" onclick="addStage()">+ Add Another Stage</button>
+            <br><br>
+            <button type="submit">Generate Report</button>
+        </form>
+    </div>
+
+    <script>
+        function addStage() {
+            const container = document.getElementById("stages-container");
+            const firstRow = container.querySelector(".stage-row");
+            const newRow = firstRow.cloneNode(true);
+            const inputs = newRow.querySelectorAll("input");
+            inputs.forEach(function (input) {
+                input.value = "";
+            });
+            container.appendChild(newRow);
+        }
+    </script>
+</body>
+</html>
