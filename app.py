@@ -2,11 +2,15 @@ from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import sqlite3
+import os
 
 app = Flask(__name__)
 app.secret_key = "scenario_report_secret_key"
 
-DB_NAME = "database.db"
+if os.environ.get("VERCEL"):
+    DB_NAME = "/tmp/database.db"
+else:
+    DB_NAME = "database.db"
 
 
 def get_db():
@@ -197,6 +201,7 @@ def delete_report(report_id):
     return redirect(url_for("dashboard"))
 
 
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True)
