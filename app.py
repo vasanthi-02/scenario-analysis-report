@@ -3,14 +3,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import sqlite3
 import os
+import tempfile
 
 app = Flask(__name__)
 app.secret_key = "scenario_report_secret_key"
 
-if os.environ.get("VERCEL"):
-    DB_NAME = "/tmp/database.db"
-else:
-    DB_NAME = "database.db"
+DB_NAME = os.path.join(tempfile.gettempdir(), "database.db")
 
 
 def get_db():
