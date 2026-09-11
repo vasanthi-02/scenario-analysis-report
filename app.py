@@ -1,18 +1,15 @@
 from flask import Flask, render_template_string, request, redirect, session, url_for, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
-import sqlite3
 import os
-import tempfile
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
 app.secret_key = "scenario_report_secret_key"
 
-DB_NAME = os.path.join(tempfile.gettempdir(), "database.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# ---------------------------------------------------------------------------
-# CSS (was static/style.css) — inlined so nothing external needs bundling
-# ---------------------------------------------------------------------------
 STYLE_CSS = """
 body {
     font-family: Arial, sans-serif;
@@ -136,11 +133,6 @@ table th {
 def style_css():
     return Response(STYLE_CSS, mimetype="text/css")
 
-
-# ---------------------------------------------------------------------------
-# Templates (were templates/*.html) — inlined as strings, rendered with
-# render_template_string so Jinja syntax (url_for, loops, filters) still works
-# ---------------------------------------------------------------------------
 
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -357,13 +349,8 @@ VIEW_REPORT_HTML = """
 """
 
 
-# ---------------------------------------------------------------------------
-# Database helpers
-# ---------------------------------------------------------------------------
-
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 
@@ -372,14 +359,14 @@ def init_db():
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL
         )
     """)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             client_name TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -387,7 +374,7 @@ def init_db():
     """)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS stages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             report_id INTEGER NOT NULL,
             stage_date TEXT NOT NULL,
             amount REAL NOT NULL,
@@ -398,6 +385,7 @@ def init_db():
         )
     """)
     conn.commit()
+    cur.close()
     conn.close()
 
 
@@ -409,10 +397,6 @@ def calculate_future_value(amount, advised_return, stage_date_str):
     future_value = amount * ((1 + advised_return / 100) ** years)
     return years, future_value
 
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 @app.route("/")
 def home():
@@ -429,16 +413,18 @@ def register():
         password = request.form["password"]
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT id FROM users WHERE username = ?", (username,))
+        cur.execute("SELECT id FROM users WHERE username = %s", (username,))
         existing = cur.fetchone()
         if existing:
             error = "Username already taken"
         else:
             hashed_password = generate_password_hash(password)
-            cur.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+            cur.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, hashed_password))
             conn.commit()
+            cur.close()
             conn.close()
             return redirect(url_for("login"))
+        cur.close()
         conn.close()
     return render_template_string(REGISTER_HTML, error=error)
 
@@ -451,8 +437,9 @@ def login():
         password = request.form["password"]
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE username = ?", (username,))
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
         user = cur.fetchone()
+        cur.close()
         conn.close()
         if user and check_password_hash(user["password"], password):
             session["user_id"] = user["id"]
@@ -475,8 +462,9 @@ def dashboard():
         return redirect(url_for("login"))
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM reports WHERE user_id = ? ORDER BY id DESC", (session["user_id"],))
+    cur.execute("SELECT * FROM reports WHERE user_id = %s ORDER BY id DESC", (session["user_id"],))
     reports = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template_string(DASHBOARD_HTML, reports=reports, username=session["username"])
 
@@ -502,10 +490,10 @@ def create_report():
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO reports (user_id, client_name, created_at) VALUES (?, ?, ?)",
+        "INSERT INTO reports (user_id, client_name, created_at) VALUES (%s, %s, %s) RETURNING id",
         (session["user_id"], client_name, datetime.now().strftime("%Y-%m-%d %H:%M"))
     )
-    report_id = cur.lastrowid
+    report_id = cur.fetchone()["id"]
 
     for i in range(len(stage_dates)):
         amount = float(amounts[i])
@@ -513,10 +501,11 @@ def create_report():
         years, future_value = calculate_future_value(amount, advised_return, stage_dates[i])
         cur.execute("""
             INSERT INTO stages (report_id, stage_date, amount, advised_return, advice_text, years, future_value)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (report_id, stage_dates[i], amount, advised_return, advice_texts[i], years, future_value))
 
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("view_report", report_id=report_id))
 
@@ -527,13 +516,15 @@ def view_report(report_id):
         return redirect(url_for("login"))
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM reports WHERE id = ? AND user_id = ?", (report_id, session["user_id"]))
+    cur.execute("SELECT * FROM reports WHERE id = %s AND user_id = %s", (report_id, session["user_id"]))
     report = cur.fetchone()
     if not report:
+        cur.close()
         conn.close()
         return redirect(url_for("dashboard"))
-    cur.execute("SELECT * FROM stages WHERE report_id = ? ORDER BY stage_date ASC", (report_id,))
+    cur.execute("SELECT * FROM stages WHERE report_id = %s ORDER BY stage_date ASC", (report_id,))
     stages = cur.fetchall()
+    cur.close()
     conn.close()
     total_value = sum(stage["future_value"] for stage in stages)
     total_invested = sum(stage["amount"] for stage in stages)
@@ -549,9 +540,10 @@ def delete_report(report_id):
         return redirect(url_for("login"))
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM reports WHERE id = ? AND user_id = ?", (report_id, session["user_id"]))
-    cur.execute("DELETE FROM stages WHERE report_id = ?", (report_id,))
+    cur.execute("DELETE FROM reports WHERE id = %s AND user_id = %s", (report_id, session["user_id"]))
+    cur.execute("DELETE FROM stages WHERE report_id = %s", (report_id,))
     conn.commit()
+    cur.close()
     conn.close()
     return redirect(url_for("dashboard"))
 
