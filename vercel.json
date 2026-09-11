@@ -1,13 +1,7 @@
 {
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python",
-      "config": { "includeFiles": ["templates/**", "static/**"] }
+  "functions": {
+    "app.py": {
+      "includeFiles": "{templates,static}/**"
     }
-  ],
-  "routes": [
-    { "src": "/static/(.*)", "dest": "/static/$1" },
-    { "src": "/(.*)", "dest": "app.py" }
-  ]
+  }
 }
